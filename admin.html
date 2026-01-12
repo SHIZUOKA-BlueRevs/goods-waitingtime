@@ -3,34 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>現在の待ち時間状況</title>
+    <title>グッズショップ待ち時間目安</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #003366; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
         .dashboard { background: white; color: #333; padding: 2.5rem; border-radius: 30px; text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.3); width: 85%; max-width: 450px; }
-        h2 { font-size: 1.2rem; color: #666; margin-bottom: 0.5rem; }
+        .label-text { font-size: 1.1rem; color: #666; margin-bottom: 0.5rem; font-weight: bold; }
         .time-display { font-size: 5rem; font-weight: bold; color: #e60012; margin: 0.5rem 0; line-height: 1; }
         .unit { font-size: 1.8rem; margin-left: 5px; }
-        .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; background: #eee; font-size: 0.8rem; color: #888; margin-top: 10px; }
-        .info { color: #999; font-size: 0.75rem; margin-top: 2rem; line-height: 1.5; }
-        .logo-text { font-weight: bold; color: #003366; margin-bottom: 20px; font-size: 1.4rem; }
+        .status-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; background: #003366; font-size: 0.9rem; color: white; margin-top: 10px; font-weight: bold; }
+        .status-badge.old { background: #f39c12; } /* 少し古い場合はオレンジ */
+        .status-badge.none { background: #95a5a6; } /* データなしはグレー */
+        .info { color: #999; font-size: 0.75rem; margin-top: 2rem; line-height: 1.5; text-align: left; border-top: 1px solid #eee; pt: 1rem; }
+        .logo-text { font-weight: bold; color: #003366; margin-bottom: 20px; font-size: 1.4rem; border-bottom: 2px solid #003366; display: inline-block; padding-bottom: 5px; }
     </style>
 </head>
 <body>
 
 <div class="dashboard">
-    <div class="logo-text">BlueRevs Goods Booth</div>
-    <h2>現在の待ち時間目安</h2>
+    <div class="logo-text">グッズショップ待ち時間目安</div>
     <div id="loading">状況を確認中...</div>
+    
     <div id="result-area" class="hidden">
+        <div id="label-area" class="label-text">現在の目安</div>
         <div class="time-display" id="avg-time">--<span class="unit">分</span></div>
-        <div id="sample-status" class="status-badge">集計中...</div>
+        <div id="sample-status" class="status-badge">データ収集中</div>
     </div>
     
     <div class="info">
-        この時間は、直前に並ばれた有志のお客様の<br>
-        計測データに基づいた「目安」です。<br>
-        状況により前後する場合がございます。
+        ※この時間は、直前に並ばれた有志のお客様の計測データに基づいた「目安」です。状況により前後する場合がございます。
     </div>
 </div>
 
@@ -42,38 +43,70 @@
     async function calculateWaitTime() {
         const now = new Date();
         const oneHourAgo = new Date(now.getTime() - (60 * 60 * 1000)).toISOString();
+        const fifteenMinAgo = new Date(now.getTime() - (15 * 60 * 1000));
 
+        // 過去1時間のデータを取得
         const { data, error } = await supabaseClient
             .from('queue_logs')
             .select('start_time, end_time')
             .eq('is_completed', true)
-            .gte('end_time', oneHourAgo);
+            .gte('end_time', oneHourAgo)
+            .order('end_time', { ascending: false });
 
         if (error) return;
 
         let totalMinutes = 0;
         let count = 0;
+        let newestTimestamp = null;
 
         data.forEach(row => {
-            const diffMin = Math.round((new Date(row.end_time) - new Date(row.start_time)) / (1000 * 60));
-            // 1分以上60分未満を有効データとする
+            const end = new Date(row.end_time);
+            const diffMin = Math.round((end - new Date(row.start_time)) / (1000 * 60));
+            
             if (diffMin >= 1 && diffMin < 60) {
                 totalMinutes += diffMin;
                 count++;
+                if (!newestTimestamp || end > newestTimestamp) {
+                    newestTimestamp = end;
+                }
             }
         });
 
-        const avg = count > 0 ? Math.round(totalMinutes / count) : "--";
+        const avg = count > 0 ? Math.round(totalMinutes / count) : null;
+        const resultArea = document.getElementById('result-area');
+        const loadingArea = document.getElementById('loading');
+        const labelArea = document.getElementById('label-area');
+        const timeArea = document.getElementById('avg-time');
+        const statusBadge = document.getElementById('sample-status');
 
-        document.getElementById('loading').classList.add('hidden');
-        document.getElementById('result-area').classList.remove('hidden');
-        document.getElementById('avg-time').innerHTML = `${avg}<span class="unit">分</span>`;
-        document.getElementById('sample-status').innerText = count > 0 ? `協力者 ${count} 名の平均` : "データ収集中";
+        loadingArea.classList.add('hidden');
+        resultArea.classList.remove('hidden');
+
+        if (avg === null) {
+            // データなし
+            labelArea.innerText = "状況";
+            timeArea.innerHTML = `<span style="font-size:2rem">データ収集中</span>`;
+            statusBadge.innerText = "協力者募集中！";
+            statusBadge.className = "status-badge none";
+        } else {
+            timeArea.innerHTML = `${avg}<span class="unit">分</span>`;
+            
+            if (newestTimestamp > fifteenMinAgo) {
+                // 15分以内のデータがある
+                labelArea.innerText = "現在の目安";
+                statusBadge.innerText = `直近 ${count} 名の平均`;
+                statusBadge.className = "status-badge";
+            } else {
+                // 15分〜60分のデータ
+                labelArea.innerText = "少し前の目安";
+                statusBadge.innerText = `約${Math.round((now - newestTimestamp)/60000)}分前のデータ`;
+                statusBadge.className = "status-badge old";
+            }
+        }
     }
 
     calculateWaitTime();
-    // 60秒ごとに更新（あまり頻繁すぎなくてOK）
-    setInterval(calculateWaitTime, 60000);
+    setInterval(calculateWaitTime, 30000); // 30秒更新
 </script>
 
 <style>.hidden { display: none; }</style>
