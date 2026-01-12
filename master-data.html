@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>【運営専用】データ管理</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; background: #f4f7f9; color: #333; padding: 2rem; }
+        .admin-card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }
+        h1 { color: #003366; font-size: 1.5rem; }
+        .stats-box { background: #e9ecef; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+        .btn { display: inline-block; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; text-decoration: none; border: none; font-size: 1rem; margin-right: 10px; }
+        .btn-download { background: #28a745; color: white; }
+        .btn-refresh { background: #6c757d; color: white; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 2rem; font-size: 0.8rem; }
+        .data-table th, .data-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .data-table th { background: #f8f9fa; }
+    </style>
+</head>
+<body>
+
+<div class="admin-card">
+    <h1>運営専用：待機列ログ管理</h1>
+    <p>蓄積されたすべての完了データを管理・抽出できます。</p>
+
+    <div class="stats-box">
+        現在までの総有効データ数：<span id="total-count" style="font-weight:bold;">計測中...</span>
+    </div>
+
+    <button class="btn btn-refresh" onclick="fetchStats()">データ更新</button>
+    <button class="btn btn-download" onclick="downloadCSV()">CSVダウンロード</button>
+
+    <table class="data-table" id="data-table">
+        <thead>
+            <tr>
+                <th>開始</th>
+                <th>終了</th>
+                <th>待ち時間(分)</th>
+            </tr>
+        </thead>
+        <tbody id="table-body">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    const SUB_URL = "https://uycmovhuawjneoicvdpb.supabase.co";
+    const SUB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5Y21vdmh1YXdqbmVvaWN2ZHBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxOTc4MzIsImV4cCI6MjA4Mzc3MzgzMn0.vQnxkNO9xNk2g1Yxs3nHVchgzU1FK_SHuCI9dVGNTjQ";
+    const supabaseClient = supabase.createClient(SUB_URL, SUB_KEY);
+
+    async function fetchStats() {
+        // 全データを取得（新しい順）
+        const { data, error } = await supabaseClient
+            .from('queue_logs')
+            .select('*')
+            .eq('is_completed', true)
+            .order('end_time', { ascending: false });
+
+        if (error) return;
+
+        document.getElementById('total-count').innerText = `${data.length} 件`;
+
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+        
+        // プレビュー用に直近5件を表示
+        data.slice(0, 5).forEach(row => {
+            const start = new Date(row.start_time);
+            const end = new Date(row.end_time);
+            const diff = Math.round((end - start) / (1000 * 60));
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${start.toLocaleTimeString()}</td><td>${end.toLocaleTimeString()}</td><td>${diff}分</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function downloadCSV() {
+        const { data, error } = await supabaseClient
+            .from('queue_logs')
+            .select('*')
+            .eq('is_completed', true)
+            .order('start_time', { ascending: true });
+
+        if (error || !data.length) {
+            alert("ダウンロードするデータがありません");
+            return;
+        }
+
+        let csv = "開始時刻,終了時刻,待ち時間(分)\n";
+        data.forEach(row => {
+            const start = new Date(row.start_time);
+            const end = new Date(row.end_time);
+            const diff = Math.round((end - start) / (1000 * 60));
+            csv += `${start.toLocaleString('ja-JP')},${end.toLocaleString('ja-JP')},${diff}\n`;
+        });
+
+        const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+        const blob = new Blob([bom, csv], { type: "text/csv" });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `bluerevs_queue_log_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+    }
+
+    fetchStats();
+</script>
+
+</body>
+</html>
