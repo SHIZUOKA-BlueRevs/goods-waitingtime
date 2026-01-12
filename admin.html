@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>【運営用】待ち時間集計</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; background: #333; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .dashboard { background: #444; padding: 2rem; border-radius: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 90%; max-width: 500px; }
+        .time-display { font-size: 4rem; font-weight: bold; color: #00ffcc; margin: 1rem 0; }
+        .unit { font-size: 1.5rem; }
+        .info { color: #aaa; font-size: 0.9rem; margin-top: 1rem; }
+        button { background: #666; color: white; border: none; padding: 0.8rem; border-radius: 8px; cursor: pointer; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <h2>現在の待ち時間目安</h2>
+    <div id="loading">集計中...</div>
+    <div id="result-area" class="hidden">
+        <div class="time-display" id="avg-time">--<span class="unit">分</span></div>
+        <div class="info" id="sample-count">集計対象：0名</div>
+    </div>
+    <div class="info" style="margin-top:20px; font-size: 0.7rem;">
+        ※過去60分以内の完了データから算出<br>
+        ※計測開始から60分以上のデータは除外
+    </div>
+    <button onclick="calculateWaitTime()">手動更新</button>
+</div>
+
+<script>
+    const SUB_URL = "https://uycmovhuawjneoicvdpb.supabase.co";
+    const SUB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5Y21vdmh1YXdqbmVvaWN2ZHBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxOTc4MzIsImV4cCI6MjA4Mzc3MzgzMn0.vQnxkNO9xNk2g1Yxs3nHVchgzU1FK_SHuCI9dVGNTjQ";
+    const supabaseClient = supabase.createClient(SUB_URL, SUB_KEY);
+
+    async function calculateWaitTime() {
+        const now = new Date();
+        const oneHourAgo = new Date(now.getTime() - (60 * 60 * 1000)).toISOString();
+
+        // 1. 過去1時間以内に「入店」したデータを取得
+        const { data, error } = await supabaseClient
+            .from('queue_logs')
+            .select('start_time, end_time')
+            .eq('is_completed', true)
+            .gte('end_time', oneHourAgo);
+
+        if (error) {
+            console.error(error);
+            return;
+        }
+
+        let totalMinutes = 0;
+        let count = 0;
+
+        data.forEach(log => {
+            const start = new Date(log.start_time);
+            const end = new Date(log.end_time);
+            const diffMs = end - start;
+            const diffMin = Math.round(diffMs / (1000 * 60));
+
+            // 異常値除外：1分以上60分未満のデータのみ集計
+            // (60分以上は「押し忘れ」の可能性が高いため、要件に基づき除外)
+            if (diffMin >= 1 && diffMin < 60) {
+                totalMinutes += diffMin;
+                count++;
+            }
+        });
+
+        const avg = count > 0 ? Math.round(totalMinutes / count) : "--";
+
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('result-area').classList.remove('hidden');
+        document.getElementById('avg-time').innerHTML = `${avg}<span class="unit">分</span>`;
+        document.getElementById('sample-count').innerText = `直近の協力者：${count}名`;
+    }
+
+    // 初回実行
+    calculateWaitTime();
+    // 30秒ごとに自動更新
+    setInterval(calculateWaitTime, 30000);
+</script>
+
+<style>
+    .hidden { display: none; }
+</style>
+
+</body>
+</html>
