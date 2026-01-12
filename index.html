@@ -6,82 +6,91 @@
     <title>待機列計測協力ボード</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f0f2f5; color: #333; }
-        .card { background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 80%; max-width: 400px; text-align: center; }
-        button { background: #007bff; color: white; border: none; padding: 1rem 2rem; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: pointer; width: 100%; margin-top: 1rem; }
-        button:disabled { background: #ccc; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f0f2f5; color: #333; }
+        .card { background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 85%; max-width: 400px; text-align: center; }
+        h2 { color: #007bff; margin-top: 0; }
+        button { background: #007bff; color: white; border: none; padding: 1.2rem 1rem; border-radius: 12px; font-size: 1.2rem; font-weight: bold; cursor: pointer; width: 100%; margin-top: 1rem; transition: opacity 0.2s; }
+        button:active { opacity: 0.7; }
         .hidden { display: none; }
-        .status { margin-bottom: 1rem; font-size: 0.9rem; color: #666; }
+        .status-info { margin-top: 1.5rem; padding: 1rem; background: #e9ecef; border-radius: 8px; font-size: 0.85rem; line-height: 1.4; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <div id="step-start">
-        <h2>グッズ列計測ボランティア</h2>
-        <p>「並び始め」と「入店直前」にボタンを押すだけで、後から来る人の助けになります。ご協力いただけますか？</p>
-        <div class="status">※個人情報は収集しません</div>
+        <h2>列の計測にご協力ください</h2>
+        <p>「並び始め」と「入店直前」にボタンを押すだけで、みんなの待ち時間目安がわかります。</p>
         <button onclick="startWaiting()">今から並び始める！</button>
+        <div class="status-info">※個人情報の取得は一切ありません。</div>
     </div>
 
     <div id="step-waiting" class="hidden">
-        <h2>計測中です...</h2>
-        <p>列に並んでいただきありがとうございます。入店の直前になったら下のボタンを押してください。</p>
-        <div class="status">（この画面は閉じても大丈夫です）</div>
+        <h2>ただいま計測中...</h2>
+        <p>列に並んでいただきありがとうございます！</p>
+        <p>入店の直前になったら、忘れずに下のボタンを押してくださいね。</p>
         <button onclick="endWaiting()" style="background: #28a745;">入店します！</button>
     </div>
 
     <div id="step-thanks" class="hidden">
-        <h2>ご協力感謝！</h2>
-        <p>計測にご協力いただきありがとうございました！</p>
-        <p>あなたのデータが、次の方の安心に繋がります。お買い物をお楽しみください！</p>
+        <h2>ご協力感謝です！</h2>
+        <p>貴重なデータ、ありがとうございました！</p>
+        <p>お買い物、楽しんできてください！</p>
+        <button onclick="resetApp()" style="background: #6c757d; font-size: 0.9rem;">トップに戻る</button>
     </div>
 </div>
 
 <script>
     const SUB_URL = "https://uycmovhuawjneoicvdpb.supabase.co";
     const SUB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5Y21vdmh1YXdqbmVvaWN2ZHBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxOTc4MzIsImV4cCI6MjA4Mzc3MzgzMn0.vQnxkNO9xNk2g1Yxs3nHVchgzU1FK_SHuCI9dVGNTjQ";
-    const supabase = supabase.createClient(SUB_URL, SUB_KEY);
+    
+    // 変数名を修正：supabaseClient にして衝突を回避
+    const supabaseClient = supabase.createClient(SUB_URL, SUB_KEY);
 
-    let sessionId = localStorage.getItem('queue_session_id');
-
-    // 画面切り替え関数
     function showStep(stepId) {
         ['step-start', 'step-waiting', 'step-thanks'].forEach(id => {
             document.getElementById(id).classList.toggle('hidden', id !== stepId);
         });
     }
 
-    // ページ読み込み時の状態確認
     async function checkStatus() {
+        const sessionId = localStorage.getItem('queue_session_id');
         if (!sessionId) {
             showStep('step-start');
             return;
         }
-        const { data } = await supabase.from('queue_logs').select('*').eq('user_session_id', sessionId).single();
+        
+        const { data, error } = await supabaseClient
+            .from('queue_logs')
+            .select('*')
+            .eq('user_session_id', sessionId)
+            .maybeSingle();
+
         if (data && data.is_completed) {
             showStep('step-thanks');
         } else if (data) {
             showStep('step-waiting');
+        } else {
+            showStep('step-start');
         }
     }
 
-    // 並び始め
     async function startWaiting() {
         const newId = crypto.randomUUID();
-        const { error } = await supabase.from('queue_logs').insert([
+        const { error } = await supabaseClient.from('queue_logs').insert([
             { user_session_id: newId, start_time: new Date().toISOString() }
         ]);
         if (!error) {
             localStorage.setItem('queue_session_id', newId);
-            sessionId = newId;
             showStep('step-waiting');
+        } else {
+            alert('エラーが発生しました。もう一度お試しください。');
         }
     }
 
-    // 入店
     async function endWaiting() {
-        const { error } = await supabase.from('queue_logs').update({ 
+        const sessionId = localStorage.getItem('queue_session_id');
+        const { error } = await supabaseClient.from('queue_logs').update({ 
             end_time: new Date().toISOString(), 
             is_completed: true 
         }).eq('user_session_id', sessionId);
@@ -89,6 +98,11 @@
         if (!error) {
             showStep('step-thanks');
         }
+    }
+
+    function resetApp() {
+        localStorage.removeItem('queue_session_id');
+        showStep('step-start');
     }
 
     checkStatus();
