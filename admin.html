@@ -11,11 +11,12 @@
         .label-text { font-size: 1.1rem; color: #666; margin-bottom: 0.5rem; font-weight: bold; }
         .time-display { font-size: 5rem; font-weight: bold; color: #e60012; margin: 0.5rem 0; line-height: 1; }
         .unit { font-size: 1.8rem; margin-left: 5px; }
-        .status-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; background: #003366; font-size: 0.9rem; color: white; margin-top: 10px; font-weight: bold; }
-        .status-badge.old { background: #f39c12; } /* 少し古い場合はオレンジ */
-        .status-badge.none { background: #95a5a6; } /* データなしはグレー */
-        .info { color: #999; font-size: 0.75rem; margin-top: 2rem; line-height: 1.5; text-align: left; border-top: 1px solid #eee; pt: 1rem; }
-        .logo-text { font-weight: bold; color: #003366; margin-bottom: 20px; font-size: 1.4rem; border-bottom: 2px solid #003366; display: inline-block; padding-bottom: 5px; }
+        .status-badge { display: inline-block; padding: 8px 18px; border-radius: 20px; background: #003366; font-size: 0.85rem; color: white; margin-top: 10px; font-weight: bold; }
+        .status-badge.old { background: #f39c12; } 
+        .status-badge.none { background: #95a5a6; } 
+        .info { color: #999; font-size: 0.75rem; margin-top: 2rem; line-height: 1.5; text-align: left; border-top: 1px solid #eee; padding-top: 1rem; }
+        .logo-text { font-weight: bold; color: #003366; margin-bottom: 20px; font-size: 1.2rem; border-bottom: 2px solid #003366; display: inline-block; padding-bottom: 5px; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -27,7 +28,7 @@
     <div id="result-area" class="hidden">
         <div id="label-area" class="label-text">現在の目安</div>
         <div class="time-display" id="avg-time">--<span class="unit">分</span></div>
-        <div id="sample-status" class="status-badge">データ収集中</div>
+        <div id="sample-status" class="status-badge">状況確認中</div>
     </div>
     
     <div class="info">
@@ -43,9 +44,8 @@
     async function calculateWaitTime() {
         const now = new Date();
         const oneHourAgo = new Date(now.getTime() - (60 * 60 * 1000)).toISOString();
-        const fifteenMinAgo = new Date(now.getTime() - (15 * 60 * 1000));
+        const thirtyMinAgo = new Date(now.getTime() - (30 * 60 * 1000));
 
-        // 過去1時間のデータを取得
         const { data, error } = await supabaseClient
             .from('queue_logs')
             .select('start_time, end_time')
@@ -62,7 +62,7 @@
         data.forEach(row => {
             const end = new Date(row.end_time);
             const diffMin = Math.round((end - new Date(row.start_time)) / (1000 * 60));
-            
+            // 異常値（1分未満または60分以上）を除外して平均を計算
             if (diffMin >= 1 && diffMin < 60) {
                 totalMinutes += diffMin;
                 count++;
@@ -82,33 +82,34 @@
         loadingArea.classList.add('hidden');
         resultArea.classList.remove('hidden');
 
+        // データが全くない、もしくは1時間以上前のものしかない場合
         if (avg === null) {
-            // データなし
             labelArea.innerText = "状況";
-            timeArea.innerHTML = `<span style="font-size:2rem">データ収集中</span>`;
-            statusBadge.innerText = "協力者募集中！";
+            timeArea.innerHTML = `<span style="font-size:1.6rem">データなし または<br>スムーズに入店可</span>`;
+            statusBadge.innerText = "（直近の協力データなし）";
             statusBadge.className = "status-badge none";
         } else {
             timeArea.innerHTML = `${avg}<span class="unit">分</span>`;
             
-            if (newestTimestamp > fifteenMinAgo) {
-                // 15分以内のデータがある
+            if (newestTimestamp > thirtyMinAgo) {
+                // 30分以内：新鮮なデータ
                 labelArea.innerText = "現在の目安";
-                statusBadge.innerText = `直近 ${count} 名の平均`;
+                statusBadge.innerText = `（直近の協力データ）`;
                 statusBadge.className = "status-badge";
             } else {
-                // 15分〜60分のデータ
+                // 30分〜60分：やや古いデータ
                 labelArea.innerText = "少し前の目安";
-                statusBadge.innerText = `約${Math.round((now - newestTimestamp)/60000)}分前のデータ`;
+                const diffPast = Math.round((now - newestTimestamp)/60000);
+                statusBadge.innerText = `（約${diffPast}分前のデータ）`;
                 statusBadge.className = "status-badge old";
             }
         }
     }
 
+    // 初回実行
     calculateWaitTime();
-    setInterval(calculateWaitTime, 30000); // 30秒更新
+    // 30秒ごとに自動更新
+    setInterval(calculateWaitTime, 30000);
 </script>
-
-<style>.hidden { display: none; }</style>
 </body>
 </html>
