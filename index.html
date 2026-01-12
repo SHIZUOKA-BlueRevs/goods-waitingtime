@@ -7,44 +7,56 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f0f2f5; color: #333; }
-        .card { background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 85%; max-width: 400px; text-align: center; }
-        h2 { color: #007bff; margin-top: 0; }
-        button { background: #007bff; color: white; border: none; padding: 1.2rem 1rem; border-radius: 12px; font-size: 1.2rem; font-weight: bold; cursor: pointer; width: 100%; margin-top: 1rem; transition: opacity 0.2s; }
-        button:active { opacity: 0.7; }
+        .card { background: white; padding: 2rem 1.5rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 88%; max-width: 400px; text-align: center; }
+        h2 { color: #007bff; margin-top: 0; font-size: 1.4rem; line-height: 1.3; }
+        p { font-size: 0.95rem; line-height: 1.6; color: #555; margin: 1rem 0; }
+        button { background: #007bff; color: white; border: none; padding: 1.2rem 1rem; border-radius: 14px; font-size: 1.2rem; font-weight: bold; cursor: pointer; width: 100%; margin-top: 0.5rem; transition: transform 0.1s; box-shadow: 0 4px 10px rgba(0,123,255,0.3); }
+        button:active { transform: scale(0.98); opacity: 0.9; }
         .hidden { display: none; }
-        .status-info { margin-top: 1.5rem; padding: 1rem; background: #e9ecef; border-radius: 8px; font-size: 0.85rem; line-height: 1.4; }
+        .status-info { margin-top: 1.5rem; padding: 0.8rem; background: #f8f9fa; border-radius: 10px; font-size: 0.8rem; color: #888; border: 1px solid #eee; }
+        .highlight { color: #007bff; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <div id="step-start">
-        <h2>列の計測にご協力ください</h2>
-        <p>「並び始め」と「入店直前」にボタンを押していただくことで、入店待ち時間目安をだすことができます。</p>
+        <h2>列の計測に<br>ご協力ください！</h2>
+        <p>
+            あなたの「並び始め」のタップが、<br>
+            みんなの<span class="highlight">待ち時間目安</span>になります。
+        </p>
         <button onclick="startWaiting()">今から並び始める！</button>
-        <div class="status-info">※個人情報の取得は一切ありません。</div>
+        <div class="status-info">※個人情報の取得は一切ありません</div>
     </div>
 
     <div id="step-waiting" class="hidden">
         <h2>ただいま計測中...</h2>
-        <p>列に並んでいただきありがとうございます！</p>
-        <p>入店の直前になったら、忘れずに下のボタンを押してくださいね。</p>
-        <button onclick="endWaiting()" style="background: #28a745;">入店します！</button>
+        <p>
+            ご協力ありがとうございます！<br>
+            列を抜ける際や、入店の直前に<br>
+            下のボタンを忘れず押してください。
+        </p>
+        <button onclick="endWaiting()" style="background: #28a745; box-shadow: 0 4px 10px rgba(40,167,69,0.3);">入店します！</button>
     </div>
 
     <div id="step-thanks" class="hidden">
-        <h2>ご協力ありがとうございました！</h2>
-        <p>貴重なデータ、活用させていただきます！</p>
-        <p>お待たせしました、お買い物、楽しんできてください！</p>
-        <button onclick="resetApp()" style="background: #6c757d; font-size: 0.9rem;">トップに戻る</button>
+        <h2>ご協力感謝いたします！</h2>
+        <p>
+            貴重なデータをありがとうございます。<br>
+            あなたの報告で目安が更新されました！
+        </p>
+        <p style="font-weight: bold; color: #333;">
+            お待たせいたしました。<br>
+            お買い物をお楽しみください！
+        </p>
+        <button onclick="resetApp()" style="background: #6c757d; font-size: 0.9rem; margin-top: 1.5rem;">トップに戻る</button>
     </div>
 </div>
 
 <script>
     const SUB_URL = "https://uycmovhuawjneoicvdpb.supabase.co";
     const SUB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5Y21vdmh1YXdqbmVvaWN2ZHBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxOTc4MzIsImV4cCI6MjA4Mzc3MzgzMn0.vQnxkNO9xNk2g1Yxs3nHVchgzU1FK_SHuCI9dVGNTjQ";
-    
-    // 変数名を修正：supabaseClient にして衝突を回避
     const supabaseClient = supabase.createClient(SUB_URL, SUB_KEY);
 
     function showStep(stepId) {
@@ -84,7 +96,7 @@
             localStorage.setItem('queue_session_id', newId);
             showStep('step-waiting');
         } else {
-            alert('エラーが発生しました。もう一度お試しください。');
+            alert('接続エラーが発生しました。時間を置いてお試しください。');
         }
     }
 
